@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Transcription App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .upload-area {
+            border: 2px dashed #007bff;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+        .upload-area:hover {
+            background-color: #f8f9fa;
+            border-color: #0056b3;
+        }
+        .upload-area.dragover {
+            background-color: #e3f2fd;
+            border-color: #0056b3;
+        }
+        .upload-text {
+            color: #666;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        .file-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: none;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+            display: none;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #007bff;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            display: none;
+        }
+        .transcription {
+            white-space: pre-wrap;
+            line-height: 1.6;
+            font-size: 14px;
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            margin: 10px 0;
+        }
+        .speaker-info {
+            background-color: #e8f5e8;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: none;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Audio Transcription App</h1>
+        
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-text">
+                Drag and drop your audio file here or click to browse
+            </div>
+            <div style="color: #999; font-size: 14px;">
+                Supported formats: MP3, WAV, M4A, FLAC
+            </div>
+            <input type="file" id="audioFile" accept="audio/*" style="display: none;">
+        </div>
+        
+        <div class="file-info" id="fileInfo">
+            <strong>Selected file:</strong> <span id="fileName"></span><br>
+            <strong>Size:</strong> <span id="fileSize"></span>
+        </div>
+        
+        <div style="text-align: center;">
+            <button class="btn" id="transcribeBtn" disabled>Transcribe Audio</button>
+            <button class="btn" id="clearBtn">Clear</button>
+        </div>
+        
+        <div class="progress" id="progress">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div id="loadingMessage">Processing your audio file...</div>
+            <div id="progressText" style="margin-top: 10px; font-size: 14px; color: #666;"></div>
+        </div>
+        
+        <div class="error" id="error"></div>
+        
+        <div class="results" id="results">
+            <div class="speaker-info" id="speakerInfo"></div>
+            <div class="transcription" id="transcription"></div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn" id="downloadBtn">Download Transcription</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const audioFile = document.getElementById('audioFile');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const transcribeBtn = document.getElementById('transcribeBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const progress = document.getElementById('progress');
+        const progressBar = document.getElementById('progressBar');
+        const loading = document.getElementById('loading');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const progressText = document.getElementById('progressText');
+        const error = document.getElementById('error');
+        const results = document.getElementById('results');
+        const speakerInfo = document.getElementById('speakerInfo');
+        const transcription = document.getElementById('transcription');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        let currentFile = null;
+        let transcriptionText = '';
+
+        // Upload area events
+        uploadArea.addEventListener('click', () => audioFile.click());
+        uploadArea.addEventListener('dragover', handleDragOver);
+        uploadArea.addEventListener('dragleave', handleDragLeave);
+        uploadArea.addEventListener('drop', handleDrop);
+
+        audioFile.addEventListener('change', handleFileSelect);
+        transcribeBtn.addEventListener('click', transcribeAudio);
+        clearBtn.addEventListener('click', clearAll);
+        downloadBtn.addEventListener('click', downloadTranscription);
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        }
+
+        function handleFile(file) {
+            if (!file.type.startsWith('audio/')) {
+                showError('Please select an audio file.');
+                return;
+            }
+
+            currentFile = file;
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.style.display = 'block';
+            transcribeBtn.disabled = false;
+            hideError();
+            hideResults();
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        async function transcribeAudio() {
+            if (!currentFile) return;
+
+            const formData = new FormData();
+            formData.append('audio', currentFile);
+
+            transcribeBtn.disabled = true;
+            loading.style.display = 'block';
+            progress.style.display = 'block';
+            hideError();
+            hideResults();
+
+            let progressValue = 0;
+            let currentStep = '';
+            let estimatedTime = 0;
+            let startTime = Date.now();
+
+            // Estimate time based on file size (rough estimate: 1MB = 10 seconds)
+            const fileSizeMB = currentFile.size / (1024 * 1024);
+            estimatedTime = Math.max(10, fileSizeMB * 10); // minimum 10 seconds
+
+            // Start progress polling with visual progress bar
+            const progressInterval = setInterval(async () => {
+                try {
+                    const progressResponse = await fetch('/progress');
+                    const progressData = await progressResponse.json();
+                    
+                    // Update message
+                    loadingMessage.textContent = progressData.message;
+                    
+                    // Update progress bar based on step
+                    if (progressData.step !== currentStep) {
+                        currentStep = progressData.step;
+                        
+                        switch (progressData.step) {
+                            case 'upload':
+                                progressValue = 10;
+                                break;
+                            case 'saving':
+                                progressValue = 20;
+                                break;
+                            case 'speakers':
+                                progressValue = 30;
+                                break;
+                            case 'transcribing':
+                                progressValue = 40;
+                                // Start simulating progress during transcription
+                                simulateTranscriptionProgress();
+                                break;
+                            case 'cleanup':
+                                progressValue = 95;
+                                break;
+                            case 'complete':
+                                progressValue = 100;
+                                clearInterval(progressInterval);
+                                break;
+                            case 'error':
+                                clearInterval(progressInterval);
+                                break;
+                        }
+                        
+                        progressBar.style.width = progressValue + '%';
+                    }
+                    
+                    // Update elapsed time
+                    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                    const remaining = Math.max(0, estimatedTime - elapsed);
+                    progressText.textContent = `Elapsed: ${elapsed}s | Estimated remaining: ${remaining}s`;
+                    
+                } catch (err) {
+                    console.log('Progress polling error:', err);
+                }
+            }, 500);
+
+            function simulateTranscriptionProgress() {
+                // Simulate progress during the transcription step (40% to 90%)
+                const transcriptionInterval = setInterval(() => {
+                    if (currentStep === 'transcribing' && progressValue < 90) {
+                        progressValue += 1;
+                        progressBar.style.width = progressValue + '%';
+                    } else {
+                        clearInterval(transcriptionInterval);
+                    }
+                }, 1000);
+            }
+
+            try {
+                const response = await fetch('/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Transcription failed');
+                }
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                transcriptionText = data.transcription;
+                speakerInfo.textContent = `Number of speakers detected: ${data.speakers}`;
+                transcription.textContent = transcriptionText;
+                results.style.display = 'block';
+
+            } catch (err) {
+                showError('Error: ' + err.message);
+            } finally {
+                clearInterval(progressInterval);
+                loading.style.display = 'none';
+                progress.style.display = 'none';
+                progressBar.style.width = '0%';
+                transcribeBtn.disabled = false;
+            }
+        }
+
+        function downloadTranscription() {
+            if (!transcriptionText) return;
+
+            const blob = new Blob([transcriptionText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'transcription.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function clearAll() {
+            currentFile = null;
+            audioFile.value = '';
+            fileInfo.style.display = 'none';
+            transcribeBtn.disabled = true;
+            hideError();
+            hideResults();
+            loading.style.display = 'none';
+            progress.style.display = 'none';
+            progressBar.style.width = '0%';
+            progressText.textContent = '';
+            transcriptionText = '';
+        }
+
+        function showError(message) {
+            error.textContent = message;
+            error.style.display = 'block';
+        }
+
+        function hideError() {
+            error.style.display = 'none';
+        }
+
+        function hideResults() {
+            results.style.display = 'none';
+        }
+    </script>
+</body>
+</html>
