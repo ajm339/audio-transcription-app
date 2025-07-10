@@ -108,6 +108,34 @@
             border-radius: 5px;
             margin-bottom: 15px;
         }
+        .speaker-segment {
+            margin: 15px 0;
+            padding: 12px;
+            border-left: 4px solid #007bff;
+            background-color: #f8f9fa;
+            border-radius: 0 5px 5px 0;
+        }
+        .speaker-header {
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        .speaker-timestamp {
+            font-size: 11px;
+            color: #666;
+            margin-left: 10px;
+        }
+        .speaker-text {
+            line-height: 1.6;
+            margin-top: 8px;
+        }
+        .speaker-1 { border-left-color: #007bff; }
+        .speaker-2 { border-left-color: #28a745; }
+        .speaker-3 { border-left-color: #ffc107; }
+        .speaker-4 { border-left-color: #dc3545; }
+        .speaker-5 { border-left-color: #6f42c1; }
+        .speaker-6 { border-left-color: #fd7e14; }
         .error {
             background-color: #f8d7da;
             color: #721c24;
@@ -174,9 +202,11 @@
         
         <div class="results" id="results">
             <div class="speaker-info" id="speakerInfo"></div>
-            <div class="transcription" id="transcription"></div>
+            <div id="segmentedTranscription"></div>
+            <div class="transcription" id="transcription" style="display: none;"></div>
             <div style="text-align: center; margin-top: 20px;">
                 <button class="btn" id="downloadBtn">Download Transcription</button>
+                <button class="btn" id="downloadSegmentsBtn">Download with Speaker Labels</button>
             </div>
         </div>
     </div>
@@ -198,10 +228,13 @@
         const results = document.getElementById('results');
         const speakerInfo = document.getElementById('speakerInfo');
         const transcription = document.getElementById('transcription');
+        const segmentedTranscription = document.getElementById('segmentedTranscription');
         const downloadBtn = document.getElementById('downloadBtn');
+        const downloadSegmentsBtn = document.getElementById('downloadSegmentsBtn');
 
         let currentFile = null;
         let transcriptionText = '';
+        let transcriptionSegments = [];
 
         // Upload area events
         uploadArea.addEventListener('click', () => audioFile.click());
@@ -213,6 +246,7 @@
         transcribeBtn.addEventListener('click', transcribeAudio);
         clearBtn.addEventListener('click', clearAll);
         downloadBtn.addEventListener('click', downloadTranscription);
+        downloadSegmentsBtn.addEventListener('click', downloadSegmentedTranscription);
 
         function handleDragOver(e) {
             e.preventDefault();
@@ -303,13 +337,23 @@
                             case 'saving':
                                 progressValue = 20;
                                 break;
+                            case 'model_loading':
+                                progressValue = 25;
+                                // Show special message for first-time model loading
+                                if (progressData.message.includes('first use')) {
+                                    progressText.innerHTML = 'First-time setup: Downloading AI models...<br><small>This may take 1-2 minutes but only happens once</small>';
+                                }
+                                break;
                             case 'speakers':
-                                progressValue = 30;
+                                progressValue = 35;
                                 break;
                             case 'transcribing':
-                                progressValue = 40;
+                                progressValue = 45;
                                 // Start simulating progress during transcription
                                 simulateTranscriptionProgress();
+                                break;
+                            case 'aligning':
+                                progressValue = 85;
                                 break;
                             case 'cleanup':
                                 progressValue = 95;
@@ -329,7 +373,13 @@
                     // Update elapsed time
                     const elapsed = Math.floor((Date.now() - startTime) / 1000);
                     const remaining = Math.max(0, estimatedTime - elapsed);
-                    progressText.textContent = `Elapsed: ${elapsed}s | Estimated remaining: ${remaining}s`;
+                    
+                    // Show warning if taking too long
+                    if (elapsed > 180 && currentStep === 'transcribing') {
+                        progressText.innerHTML = `Elapsed: ${elapsed}s | This is taking longer than expected...<br><small>Large files or slow API response may cause delays</small>`;
+                    } else {
+                        progressText.textContent = `Elapsed: ${elapsed}s | Estimated remaining: ${remaining}s`;
+                    }
                     
                 } catch (err) {
                     console.log('Progress polling error:', err);
@@ -337,15 +387,15 @@
             }, 500);
 
             function simulateTranscriptionProgress() {
-                // Simulate progress during the transcription step (40% to 90%)
+                // Simulate progress during the transcription step (45% to 80%)
                 const transcriptionInterval = setInterval(() => {
-                    if (currentStep === 'transcribing' && progressValue < 90) {
+                    if (currentStep === 'transcribing' && progressValue < 80) {
                         progressValue += 1;
                         progressBar.style.width = progressValue + '%';
                     } else {
                         clearInterval(transcriptionInterval);
                     }
-                }, 1000);
+                }, 1500);
             }
 
             try {
@@ -365,8 +415,17 @@
                 }
 
                 transcriptionText = data.transcription;
+                transcriptionSegments = data.segments || [];
                 speakerInfo.textContent = `Number of speakers detected: ${data.speakers}`;
-                transcription.textContent = transcriptionText;
+                
+                // Display segmented transcription if available
+                if (transcriptionSegments.length > 0) {
+                    displaySegmentedTranscription(transcriptionSegments);
+                } else {
+                    transcription.textContent = transcriptionText;
+                    transcription.style.display = 'block';
+                }
+                
                 results.style.display = 'block';
 
             } catch (err) {
@@ -380,6 +439,33 @@
             }
         }
 
+        function displaySegmentedTranscription(segments) {
+            segmentedTranscription.innerHTML = '';
+            
+            segments.forEach((segment, index) => {
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = `speaker-segment speaker-${segment.speaker.split(' ')[1] || '1'}`;
+                
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'speaker-header';
+                headerDiv.innerHTML = `${segment.speaker} <span class="speaker-timestamp">${formatTime(segment.start)} - ${formatTime(segment.end)}</span>`;
+                
+                const textDiv = document.createElement('div');
+                textDiv.className = 'speaker-text';
+                textDiv.textContent = segment.text;
+                
+                segmentDiv.appendChild(headerDiv);
+                segmentDiv.appendChild(textDiv);
+                segmentedTranscription.appendChild(segmentDiv);
+            });
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
         function downloadTranscription() {
             if (!transcriptionText) return;
 
@@ -388,6 +474,26 @@
             const a = document.createElement('a');
             a.href = url;
             a.download = 'transcription.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadSegmentedTranscription() {
+            if (!transcriptionSegments || transcriptionSegments.length === 0) return;
+
+            let segmentedText = '';
+            transcriptionSegments.forEach(segment => {
+                segmentedText += `[${formatTime(segment.start)} - ${formatTime(segment.end)}] ${segment.speaker}:\n`;
+                segmentedText += `${segment.text}\n\n`;
+            });
+
+            const blob = new Blob([segmentedText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'transcription_with_speakers.txt';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -406,6 +512,8 @@
             progressBar.style.width = '0%';
             progressText.textContent = '';
             transcriptionText = '';
+            transcriptionSegments = [];
+            segmentedTranscription.innerHTML = '';
         }
 
         function showError(message) {

@@ -4,9 +4,14 @@ openai==0.28.1
 python-dotenv==1.0.0
 werkzeug==2.3.7
 
-# Optional dependencies for advanced features
-# Uncomment if you want speaker diarization:
-# pyannote.audio==3.1.1
-# torch==2.0.1
-# librosa==0.10.1
-# numpy==1.24.3
+# Audio processing dependencies
+librosa==0.10.1
+numpy==1.24.3
+soundfile==0.12.1
+
+# Speaker diarization dependencies (optional)
+pyannote.audio==3.1.1
+torch==2.1.0
+scipy==1.10.1
+torchaudio==2.1.0
+speechbrain==1.0.0
